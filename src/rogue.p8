@@ -3,12 +3,15 @@ version 43
 __lua__
 -- constants
 
-debug = true
+-- tools
+debug = false
+disable_render = false
 
 -- map
 tile_size = 8
-w_width = 64
-w_height = 64
+tile_off = -4
+w_width = 16
+w_height = 16
 
 -- cellular automata
 solid_chance = 60
@@ -18,20 +21,19 @@ iterations = 3
 
 -- unit
 df_unit = {
-	x_tile = 0,
-	y_tile = 0,
 	x = 0,
 	y = 0
-}
+} -- default unit
 
 -- player
 plyr_rndr_x = 60
 plyr_rndr_y = 60
-plyr_map_off_x = -8
-plyr_map_off_y = -8
+plyr_tile_off_x = 8
+plyr_tile_off_y = 8
 
 -- art
 plyr_spr = 4
+enmy_spr = 20
 
 -->8
 -- helpers
@@ -57,6 +59,8 @@ end
 
 world = {}
 
+-- generation
+
 function make_world(is_rnd)
 	local out = {}
 	
@@ -68,7 +72,7 @@ function make_world(is_rnd)
 				if i == 0
 					or i == w_width - 1
 					or j == 0
-					or j == w_height
+					or j == w_height - 1
 				then
 					out[i][j] = 1
 				else
@@ -154,66 +158,135 @@ function generate_map()
 	set_map(world)
 end
 
+-- accessors
+
+function rnd_floor()
+	local x = 0
+	local y = 0
+	
+	while world[x][y] != 0 do
+		x = flr(rnd(w_width))
+		y = flr(rnd(w_height))
+	end
+	
+	return x, y
+end
+
 -- visuals
 
 function set_map(w_in)
 	for i = 0, w_width - 1, 1 do
 		for j = 0, w_height - 1, 1 do
-			mset(i, j, w_in[i][j])
+			if i == 0
+				or i == w_width - 1
+				or j == 0
+				or j == w_height - 1
+			then
+				mset(i, j, 21)
+			else
+				mset(i, j, w_in[i][j])
+			end
 		end
 	end
 end
 
-function render_map()
-	cel_x = plyr.tile_x
-		+ plyr_map_off_x
-	cel_y = plyr.tile_y
-		+ plyr_map_off_y
+function get_map_origin()
+	local xx, yy
+	
+	xx = (
+		-plyr.x
+		+ plyr_tile_off_x
+	) * tile_size
+		+ tile_off
+	yy = (
+		-plyr.y
+		+ plyr_tile_off_y
+	) * tile_size
+	 + tile_off
+	
+	return xx, yy
+end
 
-	map(cel_x, cel_y, -4, -4)
+function render_map()
+	local x, y = get_map_origin()
+
+	map(cel_x, cel_y, x, y)
 end
 -->8
 -- unit
 
 units = {}
 
+-- constructors
+
 function new_unit(
-	tile_x,
-	tile_y
+	x,
+	y
 )
 	local unit = copy(df_unit)
 	
-	unit.tile_x = tile_x or df_unit.tile_x
-	unit.tile_y = tile_y or df_unit.tile_y
-	unit.x = (tile_x or df_unit.x) * tile_size	
-	unit.y = (tile_x or df_unit.y)	* tile_size
+	unit.x = (x or df_unit.x)
+	unit.y = (x or df_unit.y)
 	
-	units[#units] = unit
+	units[#units + 1] = unit
 	
 	return unit
 end
 
+-- commands
+
 function move_com(unit, dx, dy)
-	unit.tile_x += dx
-	unit.tile_y += dy
+	unit.x += dx
+	unit.y += dy
+end
+
+-- visuals
+
+function get_unit_origin(unit)
+	local x, y = get_map_origin()
+	
+	x += unit.x * tile_size
+	y += unit.y * tile_size
+	
+	return x, y
+end
+
+function render_units()
+	for _, unit in pairs(units) do
+		local x, y = get_unit_origin(
+			unit				
+		)
+		
+		spr(unit.spr, x,	y)
+	end
+end
+-->8
+-- npcs
+
+function spwn_enmy()
+	local x, y = rnd_floor()
+	
+	local enmy = new_unit(x, y)
+	enmy.spr = enmy_spr
 end
 -->8
 -- player
 
-plyr = new_unit(0, 0)
+plyr = {}
 
-function render_plyr()
-	spr(
-		plyr_spr,
-		plyr_rndr_x,
-		plyr_rndr_y
-	)
+function init_plyr()
+	plyr = new_unit(0, 0)
+	plyr.is_plyr = true
+	plyr.spr = plyr_spr
 end
 -->8
 -- main
 
 function _init()
 	generate_map()
+	
+	init_plyr()
+	spwn_enmy()
 end
 
 function _update()
@@ -229,14 +302,21 @@ function _update()
 end
 
 function _draw()
+	if disable_render then
+		return
+	end
+	
 	cls()
 	
 	render_map()
-	render_plyr()
+	render_units()
 	
 	if debug then
-		print(plyr.tile_x)
-		print(plyr.tile_y)
+		print(plyr.x)
+		print(plyr.y)
+		
+		print(units[2].x)
+		print(units[2].y)
 	end
 end
 __gfx__
@@ -248,14 +328,14 @@ __gfx__
 00700700ddddddd7555555557ddddddd09aaaa905555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000ddddddd7555555557ddddddd009999005555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000ddddddd7555555557ddddddd000000005555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7000000007ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7444444407ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7444444407ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7444444407ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7000000007ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7444044447ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7444044447ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7444044447ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7000000007ddddddd00000000bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7444444407ddddddd00000000bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7444444407ddddddd08000080bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7444444407ddddddd00800800bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7000000007ddddddd00000000bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7444044447ddddddd08000080bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7444044447ddddddd00888800bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7444044447ddddddd00000000bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000ddddddd7777777777ddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000dddddddddddddddddddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000dddddddddddddddddddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
