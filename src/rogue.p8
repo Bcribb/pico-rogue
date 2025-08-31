@@ -22,7 +22,8 @@ iterations = 3
 -- unit
 df_unit = {
 	x = 0,
-	y = 0
+	y = 0,
+	bump = 1
 } -- default unit
 
 -- player
@@ -41,8 +42,10 @@ enmy_spr = 20
 -- map
 world = {}
 
+-- objects
+objs = {}
+
 -- units
-units = {}
 plyr = {}
 -->8
 -- helpers
@@ -66,11 +69,7 @@ function copy(orig)
  return copy
 end
 
--- pathfinding
 
-function is_pathable(x, y)
-	return world[x][y] == 0
-end
 -->8
 -- map
 
@@ -224,7 +223,53 @@ function render_map()
 	map(cel_x, cel_y, x, y)
 end
 -->8
--- unit
+-- pathfinding
+
+function get_obj(x, y)
+	for _, obj in pairs(objs) do
+		if (
+			obj.x == x
+			and obj.y == y
+		) then
+			return obj
+		end
+	end
+end
+
+function is_pathable(x, y)
+	return world[x][y] == 0
+end
+
+
+-->8
+-- objects
+
+-- visuals
+
+function get_obj_origin(obj)
+	local x, y = get_map_origin()
+	
+	x += (obj.x - 1) * tile_size
+	y += (obj.y - 1) * tile_size
+	
+	return x, y
+end
+
+function render_objs()
+	for _, obj in pairs(objs) do
+		local x, y = get_obj_origin(
+			obj			
+		)
+		
+		spr(obj.spr, x,	y)
+	end
+end
+
+function destroy_obj(obj)
+	del(objs, obj)
+end
+-->8
+-- units
 
 -- constructors
 
@@ -237,46 +282,11 @@ function new_unit(
 	unit.x = (x or df_unit.x)
 	unit.y = (y or df_unit.y)
 	
-	units[#units + 1] = unit
+	objs[#objs + 1] = unit
 	
 	return unit
 end
 
--- commands
-
-function move_com(unit, dx, dy)
-	local new_x = unit.x + dx
-	local new_y = unit.y + dy
-	
-	if not is_pathable(new_x, new_y) then
-		return
-	end
-	
-	unit.x += dx
-	unit.y += dy
-end
-
--- visuals
-
-function get_unit_origin(unit)
-	local x, y = get_map_origin()
-	
-	x += (unit.x - 1) * tile_size
-	y += (unit.y - 1) * tile_size
-	
-	return x, y
-end
-
-function render_units()
-	for _, unit in pairs(units) do
-		local x, y = get_unit_origin(
-			unit				
-		)
-		
-		spr(unit.spr, x,	y)
-	end
-end
--->8
 -- npcs
 
 function spwn_enmy()
@@ -285,7 +295,7 @@ function spwn_enmy()
 	local enmy = new_unit(x, y)
 	enmy.spr = enmy_spr
 end
--->8
+
 -- player
 
 function init_plyr()
@@ -296,12 +306,40 @@ function init_plyr()
 	plyr.spr = plyr_spr
 end
 -->8
+-- commands
+
+function move_com(obj, dx, dy)
+	local x = obj.x + dx
+	local y = obj.y + dy
+	local trgt_obj = get_obj(x, y)
+	
+	if trgt_obj then
+		bump_com(obj, trgt_obj)
+	
+		return
+	end
+	
+	if not is_pathable(x, y) then
+		return
+	end
+	
+	obj.x = x
+	obj.y = y
+end
+
+function bump_com(obj, trgt)
+	destroy_obj(trgt)
+end
+-->8
 -- main
 
 function _init()
 	generate_map()
 	
 	init_plyr()
+	
+	spwn_enmy()
+	spwn_enmy()
 	spwn_enmy()
 end
 
@@ -325,14 +363,11 @@ function _draw()
 	cls()
 	
 	render_map()
-	render_units()
+	render_objs()
 	
 	if debug then
 		print(plyr.x)
 		print(plyr.y)
-		
-		print(units[2].x)
-		print(units[2].y)
 	end
 end
 __gfx__
