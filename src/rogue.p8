@@ -33,7 +33,7 @@ plyr_tile_off_x = 8
 plyr_tile_off_y = 8
 
 -- npc
-leash = 5
+leash = 32
 
 -- art
 plyr_spr = 4
@@ -307,8 +307,7 @@ function bfs(fx, fy, tx, ty)
 	local c = 0
 	
 	while #open > 0 do
-		local cur = open[#open]
-		deli(open, #open)
+		local cur = deli(open, #open)
 		add(closed, cur)
 		
 		local neighbours = cur:get_neighbours()
@@ -316,14 +315,12 @@ function bfs(fx, fy, tx, ty)
 			if	not is_pathable(n.x, n.y) then
 				-- contine
 			else
-				if not find(closed, n) then
+				if not find(closed, n) and not find(open, n) then
 					parents[n] = cur
 					
 					if n == to then
 						return get_path(parents, n)
 					end
-					
-					add(open, n, 1)
 				end
 			end
 		end
@@ -393,11 +390,11 @@ end
 
 function in_range(npc)
 	local plyr_dist = (
-		(plyr.x - npc.x)
-		+ (plyr.y - npc.y)
+		abs(plyr.x - npc.x)
+		+ abs(plyr.y - npc.y)
 	)
 	
-	return plyr_dist < leash
+	return plyr_dist <= leash
 end
 
 function npcs_act()
