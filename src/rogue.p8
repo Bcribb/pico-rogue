@@ -4,7 +4,7 @@ __lua__
 -- constants
 
 -- tools
-debug = true
+debug = false
 disable_render = false
 
 -- map
@@ -32,6 +32,9 @@ plyr_rndr_y = 60
 plyr_tile_off_x = 8
 plyr_tile_off_y = 8
 
+-- npc
+leash = 5
+
 -- art
 plyr_spr = 4
 enmy_spr = 20
@@ -46,7 +49,11 @@ world = {}
 objs = {}
 
 -- units
+npcs = {}
 plyr = {}
+
+-- flow
+plyr_turn = true
 -->8
 -- helpers
 
@@ -69,6 +76,42 @@ function copy(orig)
  return copy
 end
 
+function find(t, v)
+	for key, val in pairs(t) do
+		if val == v then
+			return key
+		end
+	end
+end
+
+-- vector2
+v2 = {}
+v2.__index = v2
+v2.__eq = function(a, b)
+	return a.x == b.x and	a.y == b.y
+end
+v2.__tostring = function(t)
+	return t.x .. ", " .. t.y
+end
+
+function v2.new(x, y)
+	local inst = {
+		x = x,
+		y = y
+	}
+	setmetatable(inst, v2)
+	
+	return inst
+end
+
+function v2:get_neighbours()
+	return {
+		v2.new(self.x - 1, self.y),
+		v2.new(self.x + 1, self.y),
+		v2.new(self.x, self.y - 1),
+		v2.new(self.x, self.y + 1),
+	}
+end
 
 -->8
 -- map
@@ -220,7 +263,7 @@ end
 function render_map()
 	local x, y = get_map_origin()
 
-	map(cel_x, cel_y, x, y)
+	map(0, 0, x, y)
 end
 -->8
 -- pathfinding
@@ -238,6 +281,55 @@ end
 
 function is_pathable(x, y)
 	return world[x][y] == 0
+end
+
+function get_path(parents, from)
+	local path = {}
+	local cur = from
+	
+	while cur do
+		add(path, cur, 1)
+		
+		cur = parents[cur]
+	end
+	
+	return path
+end
+
+function bfs(fx, fy, tx, ty)
+	local from = v2.new(fx, fy)
+	local to = v2.new(tx, ty)
+	
+	local open = {from}
+	local closed = {}
+	local parents = {}
+	
+	local c = 0
+	
+	while #open > 0 do
+		local cur = open[#open]
+		deli(open, #open)
+		add(closed, cur)
+		
+		local neighbours = cur:get_neighbours()
+		for _, n in pairs(neighbours) do
+			if	not is_pathable(n.x, n.y) then
+				-- contine
+			else
+				if not find(closed, n) then
+					parents[n] = cur
+					
+					if n == to then
+						return get_path(parents, n)
+					end
+					
+					add(open, n, 1)
+				end
+			end
+		end
+	end
+	
+	return {}
 end
 
 
@@ -267,6 +359,7 @@ end
 
 function destroy_obj(obj)
 	del(objs, obj)
+	del(npcs, obj)
 end
 -->8
 -- units
@@ -289,11 +382,44 @@ end
 
 -- npcs
 
-function spwn_enmy()
+function spwn_npc()
 	local x, y = rnd_floor()
 	
-	local enmy = new_unit(x, y)
-	enmy.spr = enmy_spr
+	local npc = new_unit(x, y)
+	npc.spr = enmy_spr
+	
+	npcs[#npcs + 1] = npc
+end
+
+function in_range(npc)
+	local plyr_dist = (
+		(plyr.x - npc.x)
+		+ (plyr.y - npc.y)
+	)
+	
+	return plyr_dist < leash
+end
+
+function npcs_act()
+	for _, npc in pairs(npcs) do	
+		if in_range(npc) then
+			local path = bfs(
+				npc.x,
+				npc.y,
+				plyr.x,
+				plyr.y
+			)
+			if #path > 0 then
+				trgt = path[2]
+			
+				move_toward_com(
+					npc,
+					trgt.x,
+					trgt.y
+				)
+			end
+		end
+	end
 end
 
 -- player
@@ -314,7 +440,7 @@ function move_com(obj, dx, dy)
 	local trgt_obj = get_obj(x, y)
 	
 	if trgt_obj then
-		bump_com(obj, trgt_obj)
+		--bump_com(obj, trgt_obj)
 	
 		return
 	end
@@ -327,9 +453,28 @@ function move_com(obj, dx, dy)
 	obj.y = y
 end
 
+function move_toward_com(obj, x, y)
+	move_com(
+		obj,
+		x - obj.x,
+		y - obj.y
+	)
+end
+
 function bump_com(obj, trgt)
 	destroy_obj(trgt)
 end
+-->8
+-- flow
+
+function end_turn()
+	plyr_turn = false
+	
+	npcs_act()
+	
+	plyr_turn = true
+end
+
 -->8
 -- main
 
@@ -338,47 +483,52 @@ function _init()
 	
 	init_plyr()
 	
-	spwn_enmy()
-	spwn_enmy()
-	spwn_enmy()
+	spwn_npc()
 end
 
 function _update()
-	if (btnp(⬅️)) then
-		move_com(plyr, -1, 0)
-	elseif (btnp(➡️)) then
-		move_com(plyr, 1, 0)
-	elseif (btnp(⬆️)) then
-		move_com(plyr, 0, -1)
-	elseif (btnp(⬇️)) then
-		move_com(plyr, 0, 1)
+	if plyr_turn then
+		if (btnp(⬅️)) then
+			move_com(plyr, -1, 0)
+			end_turn()
+		elseif (btnp(➡️)) then
+			move_com(plyr, 1, 0)
+			end_turn()
+		elseif (btnp(⬆️)) then
+			move_com(plyr, 0, -1)
+			end_turn()
+		elseif (btnp(⬇️)) then
+			move_com(plyr, 0, 1)
+			end_turn()
+		end
 	end
 end
 
 function _draw()
-	if disable_render then
-		return
+	if not disable_render then
+		cls()
+	
+		render_map()
+		render_objs()
 	end
-	
-	cls()
-	
-	render_map()
-	render_objs()
 	
 	if debug then
 		print(plyr.x)
 		print(plyr.y)
+		
+		print(npcs[1].x)
+		print(npcs[1].y)
 	end
 end
 __gfx__
-00000000dddddddddddddddddddddddd000000005555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000dddddddddddddddddddddddd00aaaa005555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700dddddddddddddddddddddddd0aa0a0a05555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000ddddddd7777777777ddddddd0a7aaaa05555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000ddddddd7555555557ddddddd09a777905555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700ddddddd7555555557ddddddd09aaaa905555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7555555557ddddddd009999005555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000ddddddd7555555557ddddddd000000005555555500000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000dddddddddddddddddddddddd000000005555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
+00000000dddddddddddddddddddddddd00aaaa005555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
+00700700dddddddddddddddddddddddd0aa0a0a05555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
+00077000ddddddd7777777777ddddddd0a7aaaa05555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
+00077000ddddddd7555555557ddddddd09a777905555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
+00700700ddddddd7555555557ddddddd09aaaa905555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7555555557ddddddd009999005555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
+00000000ddddddd7555555557ddddddd000000005555555588888888000000000000000000000000000000000000000000000000000000000000000000000000
 00000000ddddddd7000000007ddddddd00000000bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000ddddddd7444444407ddddddd00000000bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000ddddddd7444444407ddddddd08000080bbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000
