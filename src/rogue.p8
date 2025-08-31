@@ -4,14 +4,14 @@ __lua__
 -- constants
 
 -- tools
-debug = false
+debug = true
 disable_render = false
 
 -- map
 tile_size = 8
 tile_off = -4
-w_width = 16
-w_height = 16
+w_width = 64
+w_height = 64
 
 -- cellular automata
 solid_chance = 60
@@ -226,7 +226,7 @@ function new_unit(
 	local unit = copy(df_unit)
 	
 	unit.x = (x or df_unit.x)
-	unit.y = (x or df_unit.y)
+	unit.y = (y or df_unit.y)
 	
 	units[#units + 1] = unit
 	
@@ -275,7 +275,9 @@ end
 plyr = {}
 
 function init_plyr()
-	plyr = new_unit(0, 0)
+	local x, y = rnd_floor()
+
+	plyr = new_unit(x, y)
 	plyr.is_plyr = true
 	plyr.spr = plyr_spr
 end
