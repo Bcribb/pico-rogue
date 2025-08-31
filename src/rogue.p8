@@ -69,7 +69,7 @@ end
 -- pathfinding
 
 function is_pathable(x, y)
-	return world[x][y] != 0
+	return world[x][y] == 0
 end
 -->8
 -- map
@@ -245,6 +245,13 @@ end
 -- commands
 
 function move_com(unit, dx, dy)
+	local new_x = unit.x + dx
+	local new_y = unit.y + dy
+	
+	if not is_pathable(new_x, new_y) then
+		return
+	end
+	
 	unit.x += dx
 	unit.y += dy
 end
