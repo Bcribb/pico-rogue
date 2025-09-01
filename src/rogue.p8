@@ -82,6 +82,8 @@ function find(t, v)
 			return key
 		end
 	end
+	
+	return -1
 end
 
 -- vector2
@@ -315,12 +317,20 @@ function bfs(fx, fy, tx, ty)
 			if	not is_pathable(n.x, n.y) then
 				-- contine
 			else
-				if not find(closed, n) and not find(open, n) then
+				local c = 
+					find(closed, n) == -1
+				local o = 
+					find(open, n) == -1
+			
+				-- not already in closed / open
+				if c and o then
 					parents[n] = cur
 					
 					if n == to then
 						return get_path(parents, n)
 					end
+					
+					add(open, n, 1)
 				end
 			end
 		end
@@ -406,6 +416,7 @@ function npcs_act()
 				plyr.x,
 				plyr.y
 			)
+			
 			if #path > 0 then
 				trgt = path[2]
 			
