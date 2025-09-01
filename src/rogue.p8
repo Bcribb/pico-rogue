@@ -33,7 +33,7 @@ plyr_tile_off_x = 8
 plyr_tile_off_y = 8
 
 -- npc
-leash = 32
+leash = 5
 
 -- art
 plyr_spr = 4
